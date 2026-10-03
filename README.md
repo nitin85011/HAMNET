@@ -1,98 +1,134 @@
-HAMNet Crowd Density Estimation - Code Documentation
+This documentation is already strong enough to serve as the technical basis for a **HAMNet methodology and reproducibility section**. The main issue is that the notebook contains multiple model versions, so a paper should clearly identify one final implementation and separate it from exploratory versions.
 
-Dataset and Annotation Processing
-Roboflow/RetinaNet-style bounding boxes
-Bounding-box center extraction
-Gaussian density-map generation
-Train/validation/test split
-Point-Aware Data Augmentation
-Scaling and cropping
-Horizontal flipping
-Rotation
-Photometric transformations
-Synchronized transformation of head points
-HAMNet Architecture
-VGG16-BN or ConvNeXt-Tiny backbone
-B3/B4 feature extraction
-Feature reduction to 256 channels
-Multi-scale dilated convolution block
-CBAM channel and spatial attention
-Density regression head
+For publication, I would structure the methodology as:
 
-Density Map Generation and Count Estimation
+1. **Dataset and Annotation Processing**
 
-$$ D(x)=\sum_{i=1}^{N}\mathcal{N}(x;x_i,\sigma_i^2) $$
+   * Roboflow/RetinaNet-style bounding boxes
+   * Bounding-box center extraction
+   * Gaussian density-map generation
+   * Train/validation/test split
 
-and
+2. **Point-Aware Data Augmentation**
 
-$$ \hat{C}=\frac{\sum_{x}\hat{D}(x)}{s} $$
+   * Scaling and cropping
+   * Horizontal flipping
+   * Rotation
+   * Photometric transformations
+   * Synchronized transformation of head points
 
-where \(x_i\) represents the annotated head centre, \(\sigma_i\) is the Gaussian bandwidth, and \(s\) is the density scaling factor.
+3. **HAMNet Architecture**
 
-Composite Training Objective
+   * VGG16-BN or ConvNeXt-Tiny backbone
+   * B3/B4 feature extraction
+   * Feature reduction to 256 channels
+   * Multi-scale dilated convolution block
+   * CBAM channel and spatial attention
+   * Density regression head
 
-For the v3 model, the loss can be formally presented as
+4. **Density Map Generation and Count Estimation**
 
-$$ \mathcal{L}= \lambda_1\mathcal{L}_{L1} +\lambda_2\mathcal{L}_{MSE} +\lambda_3\mathcal{L}_{SSIM} +\lambda_4\mathcal{L}_{count} +\lambda_5\mathcal{L}_{patch} +\lambda_6\mathcal{L}_{bias}. $$
+   $$
+   D(x)=\sum_{i=1}^{N}\mathcal{N}(x;x_i,\sigma_i^2)
+   $$
 
-The paper should report the actual \(\lambda\) values used in the notebook rather than describing the loss only qualitatively.
+   and
 
-Training Configuration
+   $$
+   \hat{C}=\frac{\sum_{x}\hat{D}(x)}{s}
+   $$
 
-Report the exact settings:
+   where \(x_i\) represents the annotated head centre, \(\sigma_i\) is the Gaussian bandwidth, and \(s\) is the density scaling factor.
 
-Parameter	Configuration
-Crop size	\(512\times512\)
-Maximum image side	1536
-Batch size	8
-Epochs	120
-Early stopping patience	40
-Head learning rate	\(2\times10^{-4}\)
-Backbone LR multiplier	0.1
-Weight decay	\(10^{-4}\)
-Warm-up	3 epochs
-Gradient clipping	5
-AMP	Enabled
-EMA decay	0.995
-Density scale	100
-Optimizer	AdamW
-Random seed	42
+5. **Composite Training Objective**
 
-Validation-Based Inference Optimization
+   For the v3 model, the loss can be formally presented as
 
-The validation set should be used to select the inference scale, horizontal flipping, and calibration. The test set must remain untouched during this selection.
+   $$
+   \mathcal{L}=
+   \lambda_1\mathcal{L}_{L1}
+   +\lambda_2\mathcal{L}_{MSE}
+   +\lambda_3\mathcal{L}_{SSIM}
+   +\lambda_4\mathcal{L}_{count}
+   +\lambda_5\mathcal{L}_{patch}
+   +\lambda_6\mathcal{L}_{bias}.
+   $$
 
-Calibration should be reported as:
+   The paper should report the actual \(\lambda\) values used in the notebook rather than describing the loss only qualitatively.
 
-$$ \alpha= \frac{\sum_i C_i^{GT}\hat C_i} {\sum_i\hat C_i^2} $$
+6. **Training Configuration**
 
-followed by
+   Report the exact settings:
 
-$$ \hat C_i^{cal}=\alpha\hat C_i. $$
+   | Parameter               |      Configuration |
+   | ----------------------- | -----------------: |
+   | Crop size               |   \(512\times512\) |
+   | Maximum image side      |               1536 |
+   | Batch size              |                  8 |
+   | Epochs                  |                120 |
+   | Early stopping patience |                 40 |
+   | Head learning rate      | \(2\times10^{-4}\) |
+   | Backbone LR multiplier  |                0.1 |
+   | Weight decay            |        \(10^{-4}\) |
+   | Warm-up                 |           3 epochs |
+   | Gradient clipping       |                  5 |
+   | AMP                     |            Enabled |
+   | EMA decay               |              0.995 |
+   | Density scale           |                100 |
+   | Optimizer               |              AdamW |
+   | Random seed             |                 42 |
 
-Evaluation Metrics
+7. **Validation-Based Inference Optimization**
 
-Clearly define:
+   The validation set should be used to select the inference scale, horizontal flipping, and calibration. The test set must remain untouched during this selection.
 
-$$ MAE=\frac{1}{N}\sum_{i=1}^{N}|C_i-\hat C_i| $$ $$ MSE=\frac{1}{N}\sum_{i=1}^{N}(C_i-\hat C_i)^2 $$ $$ RMSE=\sqrt{\frac{1}{N}\sum_{i=1}^{N}(C_i-\hat C_i)^2}. $$
+   Calibration should be reported as:
 
-If the notebook reports MSE as the square root of the mean squared error, then it should be called RMSE, not MSE. This distinction is particularly important when comparing HAMNet against published crowd-counting results.
+   $$
+   \alpha=
+   \frac{\sum_i C_i^{GT}\hat C_i}
+   {\sum_i\hat C_i^2}
+   $$
 
-Baseline Comparison
+   followed by
 
-The comparison should include MCNN, AlexNet, VGG16, ResNet50, CSRNet, and HAMNet under the same evaluation protocol wherever possible. If pretrained/public implementations use different preprocessing or datasets, that should be explicitly stated rather than presenting the numbers as directly equivalent.
+   $$
+   \hat C_i^{cal}=\alpha\hat C_i.
+   $$
 
-Reproducibility Protocol
+8. **Evaluation Metrics**
+
+   Clearly define:
+
+   $$
+   MAE=\frac{1}{N}\sum_{i=1}^{N}|C_i-\hat C_i|
+   $$
+
+   $$
+   MSE=\frac{1}{N}\sum_{i=1}^{N}(C_i-\hat C_i)^2
+   $$
+
+   $$
+   RMSE=\sqrt{\frac{1}{N}\sum_{i=1}^{N}(C_i-\hat C_i)^2}.
+   $$
+
+   If the notebook reports **MSE as the square root of the mean squared error**, then it should be called **RMSE**, not MSE. This distinction is particularly important when comparing HAMNet against published crowd-counting results.
+
+9. **Baseline Comparison**
+
+   The comparison should include MCNN, AlexNet, VGG16, ResNet50, CSRNet, and HAMNet under the **same evaluation protocol wherever possible**. If pretrained/public implementations use different preprocessing or datasets, that should be explicitly stated rather than presenting the numbers as directly equivalent.
+
+10. **Reproducibility Protocol**
 
 The final paper should state that the selected implementation was executed sequentially from a clean runtime using seed 42, with the final configuration, software environment, GPU, checkpoint, and test predictions retained.
 
-One important publication issue
+### One important publication issue
 
-Your documentation describes v3 and v4 as substantially different models:
+Your documentation describes **v3 and v4 as substantially different models**:
 
-v3: VGG16-BN + PixelShuffle ×2 density head + SSIM/composite loss.
-v4: VGG16/ConvNeXt-Tiny option + stride-8 density prediction + relative-count loss + optional tiled inference.
+* v3: VGG16-BN + PixelShuffle ×2 density head + SSIM/composite loss.
+* v4: VGG16/ConvNeXt-Tiny option + stride-8 density prediction + relative-count loss + optional tiled inference.
 
-Therefore, don't describe both as a single HAMNet architecture in the paper. Choose the implementation that produced the reported final experimental results, and identify the other versions as development/ablation versions.
+Therefore, don't describe both as a single HAMNet architecture in the paper. Choose the implementation that produced the **reported final experimental results**, and identify the other versions as development/ablation versions.
 
-If you give me the actual notebook (.ipynb) or Python file, I can turn this documentation into a publication-ready HAMNet methodology section with the exact equations, architecture diagram, algorithm/pseudocode, training table, and LaTeX code, based on what the code actually implements rather than assumptions.
+If you give me the actual notebook (`.ipynb`) or Python file, I can turn this documentation into a **publication-ready HAMNet methodology section with the exact equations, architecture diagram, algorithm/pseudocode, training table, and LaTeX code**, based on what the code actually implements rather than assumptions.
