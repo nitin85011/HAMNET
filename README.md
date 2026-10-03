@@ -1,252 +1,98 @@
 HAMNet Crowd Density Estimation - Code Documentation
 
-1. Overview
+Dataset and Annotation Processing
+Roboflow/RetinaNet-style bounding boxes
+Bounding-box center extraction
+Gaussian density-map generation
+Train/validation/test split
+Point-Aware Data Augmentation
+Scaling and cropping
+Horizontal flipping
+Rotation
+Photometric transformations
+Synchronized transformation of head points
+HAMNet Architecture
+VGG16-BN or ConvNeXt-Tiny backbone
+B3/B4 feature extraction
+Feature reduction to 256 channels
+Multi-scale dilated convolution block
+CBAM channel and spatial attention
+Density regression head
 
-The notebook implements an image-based crowd density estimation pipeline. It reads Roboflow/RetinaNet-style bounding-box annotations, converts boxes to head-centre points, generates Gaussian density maps, performs point-aware augmentation, trains HAMNet, tunes inference settings on validation data, and evaluates crowd-counting performance on a held-out test set.
+Density Map Generation and Count Estimation
 
-The notebook contains several successive implementations: an initial VGG16-BN version, a v3 enhanced VGG16-BN version, a v4 version with optional ConvNeXt-Tiny and tiled inference, and a final model-comparison implementation.
+$$ D(x)=\sum_{i=1}^{N}\mathcal{N}(x;x_i,\sigma_i^2) $$
 
-2. Notebook Structure
+and
 
-Cell
+$$ \hat{C}=\frac{\sum_{x}\hat{D}(x)}{s} $$
 
-Purpose
+where \(x_i\) represents the annotated head centre, \(\sigma_i\) is the Gaussian bandwidth, and \(s\) is the density scaling factor.
 
-0
+Composite Training Objective
 
-Google Drive mounting
+For the v3 model, the loss can be formally presented as
 
-1
+$$ \mathcal{L}= \lambda_1\mathcal{L}_{L1} +\lambda_2\mathcal{L}_{MSE} +\lambda_3\mathcal{L}_{SSIM} +\lambda_4\mathcal{L}_{count} +\lambda_5\mathcal{L}_{patch} +\lambda_6\mathcal{L}_{bias}. $$
 
-Dataset extraction
+The paper should report the actual \(\lambda\) values used in the notebook rather than describing the loss only qualitatively.
 
-2
+Training Configuration
 
-Dataset verification
+Report the exact settings:
 
-3
+Parameter	Configuration
+Crop size	\(512\times512\)
+Maximum image side	1536
+Batch size	8
+Epochs	120
+Early stopping patience	40
+Head learning rate	\(2\times10^{-4}\)
+Backbone LR multiplier	0.1
+Weight decay	\(10^{-4}\)
+Warm-up	3 epochs
+Gradient clipping	5
+AMP	Enabled
+EMA decay	0.995
+Density scale	100
+Optimizer	AdamW
+Random seed	42
 
-Annotation CSV inspection
+Validation-Based Inference Optimization
 
-4
+The validation set should be used to select the inference scale, horizontal flipping, and calibration. The test set must remain untouched during this selection.
 
-Dependency installation
+Calibration should be reported as:
 
-5
+$$ \alpha= \frac{\sum_i C_i^{GT}\hat C_i} {\sum_i\hat C_i^2} $$
 
-Initial HAMNet implementation
+followed by
 
-6
+$$ \hat C_i^{cal}=\alpha\hat C_i. $$
 
-Empty
+Evaluation Metrics
 
-7
+Clearly define:
 
-HAMNet v3
+$$ MAE=\frac{1}{N}\sum_{i=1}^{N}|C_i-\hat C_i| $$ $$ MSE=\frac{1}{N}\sum_{i=1}^{N}(C_i-\hat C_i)^2 $$ $$ RMSE=\sqrt{\frac{1}{N}\sum_{i=1}^{N}(C_i-\hat C_i)^2}. $$
 
-8
+If the notebook reports MSE as the square root of the mean squared error, then it should be called RMSE, not MSE. This distinction is particularly important when comparing HAMNet against published crowd-counting results.
 
-HAMNet v4
+Baseline Comparison
 
-9
+The comparison should include MCNN, AlexNet, VGG16, ResNet50, CSRNet, and HAMNet under the same evaluation protocol wherever possible. If pretrained/public implementations use different preprocessing or datasets, that should be explicitly stated rather than presenting the numbers as directly equivalent.
 
-Model comparison
+Reproducibility Protocol
 
-10
+The final paper should state that the selected implementation was executed sequentially from a clean runtime using seed 42, with the final configuration, software environment, GPU, checkpoint, and test predictions retained.
 
-Empty
+One important publication issue
 
-3. Dataset
+Your documentation describes v3 and v4 as substantially different models:
 
-Expected structure:
+v3: VGG16-BN + PixelShuffle ×2 density head + SSIM/composite loss.
+v4: VGG16/ConvNeXt-Tiny option + stride-8 density prediction + relative-count loss + optional tiled inference.
 
-/content/crowd_data/
-├── train/
-├── valid/
-└── test/
+Therefore, don't describe both as a single HAMNet architecture in the paper. Choose the implementation that produced the reported final experimental results, and identify the other versions as development/ablation versions.
 
-Each split contains images and _annotations.csv.
-
-Bounding boxes are converted to head-centre points. Gaussian kernels are placed at these points to form density maps. Later versions support box-size, KNN and fixed sigma modes.
-
-4. Data Augmentation
-
-The implementation supports:
-
-random scaling
-
-random cropping
-
-horizontal flipping
-
-rotation
-
-brightness/contrast/saturation adjustment
-
-gamma adjustment
-
-noise perturbation in earlier variants
-
-Point coordinates are transformed together with images.
-
-5. HAMNet Architecture
-
-Backbone
-
-The v3 implementation uses ImageNet-pretrained VGG16-BN. B3 and B4 features are fused and reduced to 256 channels.
-
-The v4 implementation supports ConvNeXt-Tiny and VGG16.
-
-Multi-Scale Fusion
-
-Four 3x3 dilated convolutions use dilation rates 1, 2, 3 and 4. Their outputs are concatenated, projected to 256 channels and combined with a residual connection.
-
-CBAM
-
-Channel attention uses global average/max pooling and an MLP. Spatial attention uses average/max channel projections followed by a 7x7 convolution.
-
-Density Head
-
-The VGG-based v3 head uses three PixelShuffle x2 stages. The v4 model predicts a stride-8 density map.
-
-Count:
-predicted_count = sum(predicted_density) / density_scale
-
-6. Loss
-
-The v3 composite loss includes:
-
-L1 density loss
-
-MSE density loss
-
-SSIM loss
-
-global count loss
-
-multi-scale patch-count loss
-
-batch bias loss
-
-The v4 loss replaces SSIM with relative count loss.
-
-7. Training
-
-The v3 configuration uses:
-
-crop size: 512x512
-
-maximum side: 1536
-
-batch size: 8
-
-epochs: 120
-
-patience: 40
-
-head LR: 2e-4
-
-backbone LR multiplier: 0.1
-
-weight decay: 1e-4
-
-warm-up: 3 epochs
-
-gradient clipping: 5
-
-AMP: enabled
-
-EMA decay: 0.995
-
-density scale: 100
-
-Optimizer: AdamW.
-
-8. Inference
-
-Validation data is used to select:
-
-scale: 1.0, 1.25 or 1.5
-
-horizontal flip: enabled/disabled
-
-optional count calibration
-
-Calibration:
-alpha = sum(gt * pred) / sum(pred^2)
-
-The selected configuration is then applied to the test set.
-
-The v4 implementation also supports overlapping tiled inference.
-
-9. Metrics
-
-The notebook reports:
-
-MAE
-
-MSE
-
-RMSE
-
-MAPE
-
-counting accuracy
-
-The exact formulas should be stated in any paper because crowd-counting literature sometimes uses the term MSE differently.
-
-10. Model Comparison
-
-The comparison cell evaluates:
-
-MCNN
-
-AlexNet
-
-VGG16
-
-ResNet50
-
-CSRNet
-
-HAMNet
-
-It records parameter count, MAE, MSE, RMSE, MAPE, accuracy, inference time and training time.
-
-11. Outputs
-
-Typical outputs include:
-
-HAMNet checkpoint .pth
-
-training history
-
-per-image prediction CSV
-
-comparison JSON files
-
-summary.csv
-
-per_image_predictions.csv
-
-comparison.png
-
-12. Reproducibility
-
-The later implementations use seed 42. For reproducible experiments:
-
-Select one implementation version.
-
-Run it from a clean runtime.
-
-Record the exact configuration.
-
-Record GPU/software versions.
-
-Keep the checkpoint and test prediction CSV.
-
-Tune inference parameters only on validation data.
-
-13. Important Note
-
-The notebook contains multiple complete implementations. Running cells from different versions out of order can redefine classes, functions and configuration values. For publication experiments, keep the selected version in a separate notebook or Python module and run it from top to bottom
+If you give me the actual notebook (.ipynb) or Python file, I can turn this documentation into a publication-ready HAMNet methodology section with the exact equations, architecture diagram, algorithm/pseudocode, training table, and LaTeX code, based on what the code actually implements rather than assumptions.
